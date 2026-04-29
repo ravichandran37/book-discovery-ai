@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>discover. | AI Librarian</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        body { background-color: #FAFAFA; overflow: hidden; }
+        #chatArea::-webkit-scrollbar { width: 4px; }
+        #chatArea::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 10px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col font-sans text-gray-900">
+
+    <!-- Header -->
+    <nav class="p-6 flex justify-between items-center bg-white/80 backdrop-blur-md border-b border-gray-100 z-20">
+        <h1 class="text-2xl font-black tracking-tighter">discover.</h1>
+        <span class="text-[10px] font-bold text-gray-400 tracking-widest uppercase">Nexwe Solutions AI</span>
+    </nav>
+
+    <!-- Chat Space -->
+    <main id="chatArea" class="flex-grow overflow-y-auto px-6 pt-10 pb-40">
+        <div class="max-w-3xl mx-auto flex flex-col gap-8" id="messageList">
+            <!-- Welcome View -->
+            <div id="welcome" class="text-center py-20 fade-in">
+                <h2 class="text-4xl font-bold mb-4">Find your next story.</h2>
+                <p class="text-gray-400">Ask for a vibe, a genre, or a specific topic.</p>
+            </div>
+        </div>
+
+        <div id="loader" class="hidden text-center my-10 animate-pulse">
+            <span class="text-[10px] font-bold text-gray-300 tracking-[0.3em] uppercase">Checking the shelves...</span>
+        </div>
+    </main>
+
+    <!-- Bottom Input -->
+    <div class="fixed bottom-0 inset-x-0 p-6 bg-gradient-to-t from-[#FAFAFA] via-[#FAFAFA] pt-10">
+        <div class="max-w-2xl mx-auto">
+            <!-- Pills -->
+            <div class="flex flex-wrap gap-2 mb-4 justify-center">
+                <button onclick="quickSearch('Dark sci-fi about AI')" class="px-4 py-1.5 bg-white border border-gray-200 rounded-full text-xs font-medium text-gray-500 hover:border-black transition-all">🤖 Rogue AI</button>
+                <button onclick="quickSearch('Epic high fantasy')" class="px-4 py-1.5 bg-white border border-gray-200 rounded-full text-xs font-medium text-gray-500 hover:border-black transition-all">⚔️ Fantasy</button>
+            </div>
+
+            <!-- Input Bar -->
+            <div class="bg-white border border-gray-200 rounded-2xl p-2 shadow-xl flex items-center group focus-within:border-black transition-all">
+                <input type="text" id="userInput" class="flex-grow px-4 py-2 outline-none text-md" placeholder="Message your librarian...">
+                <button id="sendBtn" class="bg-black text-white px-6 py-2.5 rounded-xl font-bold text-sm active:scale-95 transition-transform">Ask</button>
+            </div>
+        </div>
+    </nav>
+
+    <script>
+        let history = [];
+        const msgList = document.getElementById('messageList');
+        const loader = document.getElementById('loader');
+        const scrollArea = document.getElementById('chatArea');
+        const input = document.getElementById('userInput');
+
+        function quickSearch(txt) { input.value = txt; document.getElementById('sendBtn').click(); }
+
+        function addBubble(role, text, meta = null) {
+            document.getElementById('welcome')?.remove();
+            const div = document.createElement('div');
+            div.className = `flex w-full fade-in ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            
+            if (role === 'user') {
+                div.innerHTML = `<div class="bg-black text-white px-5 py-3 rounded-2xl max-w-[80%] shadow-sm text-sm">${text}</div>`;
+            } else {
+                const img = meta?.thumbnail ? `<img src="${meta.thumbnail}" class="w-20 rounded-lg shadow-md h-auto">` : '';
+                div.innerHTML = `
+                    <div class="bg-white border border-gray-100 p-6 rounded-3xl w-full flex gap-6 shadow-sm">
+                        <div class="flex-shrink-0">${img}</div>
+                        <p class="text-gray-700 leading-relaxed text-sm whitespace-pre-wrap">${text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')}</p>
+                    </div>`;
+            }
+            msgList.appendChild(div);
+            scrollArea.scrollTo({ top: scrollArea.scrollHeight, behavior: 'smooth' });
+        }
+
+        document.getElementById('sendBtn').onclick = async () => {
+            const val = input.value.trim();
+            if (!val) return;
+            addBubble('user', val);
+            input.value = '';
+            loader.classList.remove('hidden');
+
+            try {
+                const res = await fetch('/api/discovery/ask/', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+                    body: JSON.stringify({query: val, history: history})
+                });
+                const data = await res.json();
+                loader.classList.add('hidden');
+                if (res.ok) {
+                    addBubble('ai', data.recommendation, data.book_data[0]);
+                    history = [...history, ...data.new_history];
+                }
+            } catch (e) { loader.classList.add('hidden'); console.error(e); }
+        };
+
+        input.onkeypress = (e) => { if(e.key === 'Enter') document.getElementById('sendBtn').click(); };
+    </script>
+</body>
+</html>
